@@ -3,9 +3,11 @@ package ws
 // Filename: internal/ws/handler.go
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -17,6 +19,8 @@ const (
 	pongWait   = 30 * time.Second    // if we don't get a pong in 30s, time out
 	pingPeriod = (pongWait * 9) / 10 // send pings at ~90% of pongWait (e.g., 27s)
 )
+
+var messageCounter uint64
 
 // Only allow pages served from this origin to connect
 var allowedOrigins = []string{
@@ -130,6 +134,9 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
+
+			var echoPayload []byte = payload
+
 			// Part 1: Uppecase Echo
 			if strings.HasPrefix(string(payload), "UPPER:") {
 				text := strings.TrimPrefix(string(payload), "UPPER:")
@@ -144,6 +151,21 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+				log.Printf("write error: %v", err)
+				break
+			}
+
+			// Part 3: BROADCAST COUNTER
+			// Increment the counter atomically
+			count := atomic.AddUint64(&messageCounter, 1)
+
+			// Format the response with the counter
+			newPayload := fmt.Sprintf("[Msg #%d] %s", count, echoPayload)
+			echoPayload = []byte(newPayload) // Use the new, formatted payload
+			// ---------------------------------
+
+			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := conn.WriteMessage(websocket.TextMessage, echoPayload); err != nil {
 				log.Printf("write error: %v", err)
 				break
 			}
