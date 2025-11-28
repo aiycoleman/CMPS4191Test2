@@ -130,10 +130,18 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
+			// Part 1: Uppecase Echo
 			if strings.HasPrefix(string(payload), "UPPER:") {
 				text := strings.TrimPrefix(string(payload), "UPPER:")
 				payload = []byte(strings.ToUpper(text))
 			}
+
+			// Part 2: Reverse Echo
+			if strings.HasPrefix(string(payload), "REVERSE:") {
+				text := strings.TrimPrefix(string(payload), "REVERSE:")
+				payload = []byte(reverseString(text))
+			}
+
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
 				log.Printf("write error: %v", err)
@@ -146,4 +154,13 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	close(done)
 
 	log.Printf("connection closed from %s", r.RemoteAddr)
+}
+
+// TODO 2: Add a function to reverse a string
+func reverseString(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < len(runes)/2; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
 }
