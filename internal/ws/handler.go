@@ -3,6 +3,7 @@ package ws
 // Filename: internal/ws/handler.go
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,6 +53,18 @@ var upgrader = websocket.Upgrader{
 	Error: func(w http.ResponseWriter, r *http.Request, status int, reason error) {
 		http.Error(w, "origin not allowed", http.StatusForbidden)
 	},
+}
+
+type CommandRequest struct {
+	Command string  `json:"command"`
+	A       float64 `json:"a"`
+	B       float64 `json:"b"`
+}
+
+type CommandResponse struct {
+	Result  float64 `json:"result,omitempty"`
+	Command string  `json:"command"`
+	Error   string  `json:"error,omitempty"`
 }
 
 // Attempt to upgrade from HTTP to RFC 6455
@@ -135,20 +148,42 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// Echo back text messages
 		if msgType == websocket.TextMessage {
 
+			isJSON := len(payload) > 0 && payload[0] == '{'
+
+			if isJSON {
+				response, err := processCommand(payload) // Process JSON command
+
+				// If processing failed
+				if err != nil {
+					log.Printf("json command error: %v", err)
+					// Send back an error JSON response
+					response, _ = json.Marshal(CommandResponse{
+						Command: "error",
+						Error:   fmt.Sprintf("processing error: %v", err.Error()),
+					})
+				}
+
+				_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.TextMessage, response); err != nil {
+					log.Printf("write error: %v", err)
+					break
+				}
+				continue
+			}
+
 			var echoPayload []byte = payload
 
-			// Part 1: Uppecase Echo
+			// Part 1: Uppercase Echo
 			if strings.HasPrefix(string(payload), "UPPER:") {
 				text := strings.TrimPrefix(string(payload), "UPPER:")
-				payload = []byte(strings.ToUpper(text))
+				echoPayload = []byte(strings.ToUpper(text))
 			}
 
-			// Part 2: Reverse Echo
+			// Part 2: Reverse Echo (Use else if to prevent both from running)
 			if strings.HasPrefix(string(payload), "REVERSE:") {
 				text := strings.TrimPrefix(string(payload), "REVERSE:")
-				payload = []byte(reverseString(text))
+				echoPayload = []byte(reverseString(text))
 			}
-
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
 				log.Printf("write error: %v", err)
@@ -185,4 +220,40 @@ func reverseString(s string) string {
 		runes[i], runes[j] = runes[j], runes[i]
 	}
 	return string(runes)
+}
+
+func processCommand(payload []byte) ([]byte, error) {
+	var req CommandRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		return nil, fmt.Errorf("invalid json: %w", err)
+	}
+
+	res := CommandResponse{
+		Command: req.Command,
+	}
+
+	switch req.Command {
+	case "add":
+		res.Result = req.A + req.B
+	case "subtract":
+		res.Result = req.A - req.B
+	case "multiply":
+		res.Result = req.A * req.B
+	case "divide":
+		if req.B == 0 {
+			res.Error = "cannot divide by zero"
+			res.Result = 0
+		} else {
+			res.Result = req.A / req.B
+		}
+	default:
+		res.Error = fmt.Sprintf("unknown command: %s", req.Command)
+		res.Result = 0
+	}
+
+	responseBytes, err := json.Marshal(res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+	return responseBytes, nil
 }

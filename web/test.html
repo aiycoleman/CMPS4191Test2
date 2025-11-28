@@ -27,6 +27,7 @@
     <button id="stop">Stop Sending</button>
     <button id="upper">Send UPPERCASE Message</button>
     <button id="reverse_test">Send REVERSED Message </button>
+    <button id="json_add_test">Send JSON ADD</button>
     <pre id="log"></pre>
 
     <script>
@@ -43,6 +44,8 @@
       const stop_btn = document.querySelector("#stop");
       const upper_btn = document.querySelector("#upper");
       const reverse_btn = document.querySelector("#reverse_test");
+      const json_add_btn = document.querySelector("#json_add_test");
+
 
       // --- CONNECT ---------------------------------------------------
       connect_btn.addEventListener("click", () => {
@@ -58,7 +61,12 @@
         };
 
         socket.onmessage = (event) => {
-          log("ECHO FROM SERVER:", event.data);
+            try {
+                const data = JSON.parse(event.data);
+                log("JSON FROM SERVER:", data);
+            } catch (e) {
+                log("ECHO FROM SERVER:", event.data);
+            }
         };
 
         socket.onerror = (error) => {
@@ -128,6 +136,19 @@
           socket.send(msg);
           log("SEND (REVERSE):", msg);
       });
+
+      // --- JSON ADD TEST ---------------------------------------------
+        json_add_btn.addEventListener("click", () => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                log("Not connected yet.");
+                return;
+            }
+            const command = { command: "add", a: 10, b: 5 };
+            const msg = JSON.stringify(command);
+            socket.send(msg);
+            log("SEND (JSON ADD):", msg);
+        });
+
     </script>
   </body>
 </html>
