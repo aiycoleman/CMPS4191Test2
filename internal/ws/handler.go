@@ -121,6 +121,14 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Rate limiting Challenge
+	const (
+		rateLimitCount  = 10
+		rateLimitPeriod = 60 * time.Second
+	)
+
+	var messageHistory []time.Time
+
 	// Read/Echo loop
 	for {
 		msgType, payload, err := conn.ReadMessage()
@@ -170,6 +178,26 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				continue
 			}
+
+			now := time.Now()
+
+			cutoff := now.Add(-rateLimitPeriod)
+
+			j := 0
+			for _, t := range messageHistory {
+				if t.After(cutoff) {
+					messageHistory[j] = t
+					j++
+				}
+			}
+			messageHistory = messageHistory[:j]
+
+			if len(messageHistory) >= rateLimitCount {
+				log.Printf("Rate limit exceeded for %s. Message dropped.", r.RemoteAddr)
+				continue
+			}
+
+			messageHistory = append(messageHistory, now)
 
 			var echoPayload []byte = payload
 
