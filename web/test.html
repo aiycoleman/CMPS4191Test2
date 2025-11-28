@@ -25,6 +25,7 @@
     <button id="connect">Connect</button>
     <button id="start">Start Sending (client ping)</button>
     <button id="stop">Stop Sending</button>
+    <button id="upper">Send UPPERCASE Message</button>
     <pre id="log"></pre>
 
     <script>
@@ -39,6 +40,7 @@
       const connect_btn = document.querySelector("#connect");
       const start_btn = document.querySelector("#start");
       const stop_btn = document.querySelector("#stop");
+      const upper_btn = document.querySelector("#upper");
 
       // --- CONNECT ---------------------------------------------------
       connect_btn.addEventListener("click", () => {
@@ -102,6 +104,17 @@
           log("Nothing to stop.");
         }
       });
+
+      // --- UPPERCASE TEST ---------------------------------------------
+      upper_btn.addEventListener("click", () => {
+          if (!socket || socket.readyState !== WebSocket.OPEN) {
+              log("Not connected yet.");
+              return;
+          }
+          const msg = "UPPER:hello world";
+          socket.send(msg);
+          log("SEND (UPPER):", msg);
+        });
     </script>
   </body>
 </html>
